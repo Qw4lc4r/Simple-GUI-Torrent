@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -9,31 +9,34 @@ using System.Windows.Controls;
 using MonoTorrent;
 using MonoTorrent.Client;
 using QWTorrent_GUI;
+
 namespace TorrentWpfClient
 {
     public partial class MainWindow : Window
     {
         private ClientEngine engine;
+        private TorrentManager selectedManager;
         private List<TorrentManager> torrents = new List<TorrentManager>();
         private ObservableCollection<TorrentStatus> torrentStatusList = new ObservableCollection<TorrentStatus>();
-        private string downloadPath = @"C:\path\to\download"; // Значение по умолчанию
+        private string downloadPath = @"C:\path\to\download";
 
         public MainWindow()
         {
             InitializeComponent();
             TorrentStatusList.ItemsSource = torrentStatusList;
 
-            // Создаем настройки торрент-клиента
             var engineSettings = new EngineSettings
             {
-                // Настройка других параметров, если необходимо
+                // Engine settings initialization (if necessary)
             };
 
-            // Создаем движок торрент-клиента
             engine = new ClientEngine(engineSettings);
+
+            // Подписываемся на событие выбора в списке TorrentStatusList
+            TorrentStatusList.SelectionChanged += TorrentStatusList_SelectionChanged;
         }
 
-        // Обработчик нажатия на кнопку "Добавить торренты"
+        // Обработчик для добавления нескольких торрентов
         private async void AddTorrentsButton_Click(object sender, RoutedEventArgs e)
         {
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
@@ -48,7 +51,7 @@ namespace TorrentWpfClient
 
                 using (var folderDialog = new System.Windows.Forms.FolderBrowserDialog())
                 {
-                    folderDialog.Description = "Выберите папку для сохранения файлов";
+                    folderDialog.Description = "Select a folder to save files";
                     folderDialog.SelectedPath = downloadPath;
 
                     if (folderDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
@@ -65,27 +68,23 @@ namespace TorrentWpfClient
 
                             if (torrents.Any(t => t.Torrent == torrent))
                             {
-                                MessageBox.Show($"Торрент {torrent.Name} уже был добавлен.");
+                                MessageBox.Show($"Torrent {torrent.Name} has already been added.");
                                 continue;
                             }
 
-                            // Создаем менеджер торрента
                             var manager = await engine.AddAsync(torrent, downloadPath);
                             torrents.Add(manager);
 
-                            // Добавляем торрент в список интерфейса
                             TorrentList.Items.Add(torrent);
 
-                            // Добавляем статус торрента в ObservableCollection
                             var status = new TorrentStatus
                             {
                                 Name = torrent.Name,
                                 Progress = "0%",
-                                Status = "Запуск"
+                                Status = "Starting"
                             };
                             torrentStatusList.Add(status);
 
-                            // Запускаем загрузку сразу после добавления
                             await manager.StartAsync();
                             MonitorProgress(manager);
                         }
@@ -94,64 +93,115 @@ namespace TorrentWpfClient
             }
         }
 
-        // Метод для мониторинга прогресса загрузки
+        // Обработчик выбора торрента в TorrentStatusList
+        private void TorrentStatusList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (TorrentStatusList.SelectedItem is TorrentStatus selectedStatus)
+            {
+                selectedManager = torrents.FirstOrDefault(t => t.Torrent.Name == selectedStatus.Name);
+                if (selectedManager != null)
+                {
+                    UpdateProgressBar();
+                }
+            }
+        }
+
+        // Обновление прогресс-бара для выбранного торрента
+        private void UpdateProgressBar()
+        {
+            if (selectedManager != null)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    DownloadProgressBar.Value = selectedManager.Progress;
+                });
+            }
+        }
+
+        // Мониторинг прогресса загрузки торрентов
         private async void MonitorProgress(TorrentManager manager)
         {
-            var statusItem = torrentStatusList
-                .FirstOrDefault(item => item.Name == manager.Torrent.Name);
+            var statusItem = torrentStatusList.FirstOrDefault(item => item.Name == manager.Torrent.Name);
 
             while (manager.Progress < 100)
             {
                 var progress = Math.Round(manager.Progress, 2);
                 Dispatcher.Invoke(() =>
                 {
-                    DownloadProgressBar.Value = progress;
-                    ProgressTextBlock.Text = $"{progress}%";
+                    if (selectedManager == manager)
+                    {
+                        DownloadProgressBar.Value = progress;
+                    }
 
                     if (statusItem != null)
                     {
                         statusItem.Progress = $"{progress}%";
-                        statusItem.Status = "Загрузка";
+                        statusItem.Status = "Downloading";
                     }
                 });
 
                 await Task.Delay(1000);
             }
 
-            // Устанавливаем полное значение после завершения
             Dispatcher.Invoke(() =>
             {
-                DownloadProgressBar.Value = 100;
-                ProgressTextBlock.Text = "100%";
-
                 if (statusItem != null)
                 {
                     statusItem.Progress = "100%";
-                    statusItem.Status = "Завершено";
+                    statusItem.Status = "Completed";
                 }
             });
         }
 
-        // Обработчик нажатия на кнопку "Остановить"
-        private async void StopTorrentButton_Click(object sender, RoutedEventArgs e)
+        // Обработчик удаления торрента
+        private async void DeleteTorrentButton_Click(object sender, RoutedEventArgs e)
         {
-            if (TorrentList.SelectedItem is Torrent selectedTorrent)
+            MessageBox.Show("The program stops downloading this torrent file, please wait");
+            if (TorrentStatusList.SelectedItem is TorrentStatus selectedStatus)
             {
-                var manager = torrents.Find(t => t.Torrent == selectedTorrent);
+                var manager = torrents.FirstOrDefault(t => t.Torrent.Name == selectedStatus.Name);
                 if (manager != null)
                 {
-                    await manager.StopAsync();
-                    await WaitForManagerState(manager, TorrentState.Stopped);
-
-                    var statusItem = torrentStatusList
-                        .FirstOrDefault(item => item.Name == selectedTorrent.Name);
-
-                    if (statusItem != null)
+                    if (manager.State == TorrentState.Seeding || manager.State == TorrentState.Downloading)
                     {
-                        Dispatcher.Invoke(() =>
+                        await manager.StopAsync();
+                        await WaitForManagerState(manager, TorrentState.Stopped);
+                    }
+
+                    // Спрашиваем у пользователя, хочет ли он удалить файлы
+                    var result = MessageBox.Show("Delete application folder?",
+                        "Delete torrent", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        try
                         {
-                            statusItem.Status = "Остановлено";
-                        });
+                            // Определяем путь к папке, в которую были загружены файлы торрента
+                            string torrentDownloadPath = Path.Combine(downloadPath, selectedStatus.Name);
+
+                            if (Directory.Exists(torrentDownloadPath))
+                            {
+                                Directory.Delete(torrentDownloadPath, true); // Удаление папки с содержимым
+                                MessageBox.Show($"The application folder {torrentDownloadPath} has been deleted.");
+                            }
+                            
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Failed to delete folder: {ex.Message}");
+                        }
+                    }
+
+                    await engine.RemoveAsync(manager);
+
+                    torrents.Remove(manager);
+
+                    torrentStatusList.Remove(selectedStatus);
+
+                    if (selectedManager == manager)
+                    {
+                        selectedManager = null;
+                        DownloadProgressBar.Value = 0;
                     }
                 }
             }
@@ -161,28 +211,7 @@ namespace TorrentWpfClient
         {
             while (manager.State != targetState)
             {
-                await Task.Delay(500); // Ожидание полсекунды
-            }
-        }
-
-        // Обработчик нажатия на кнопку "Запустить"
-        private async void StartTorrentButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (TorrentList.SelectedItem is Torrent selectedTorrent)
-            {
-                var manager = torrents.Find(t => t.Torrent == selectedTorrent);
-                if (manager != null)
-                {
-                    if (manager.State == TorrentState.Stopped || manager.State == TorrentState.Paused)
-                    {
-                        await manager.StartAsync();
-                        MonitorProgress(manager);
-                    }
-                    else
-                    {
-                        MessageBox.Show("Торрент находится в состоянии, в котором нельзя запустить его.");
-                    }
-                }
+                await Task.Delay(500);
             }
         }
     }
