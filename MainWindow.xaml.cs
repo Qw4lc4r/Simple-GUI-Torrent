@@ -32,11 +32,11 @@ namespace TorrentWpfClient
 
             engine = new ClientEngine(engineSettings);
 
-            // Подписываемся на событие выбора в списке TorrentStatusList
+            
             TorrentStatusList.SelectionChanged += TorrentStatusList_SelectionChanged;
         }
 
-        // Обработчик для добавления нескольких торрентов
+        
         private async void AddTorrentsButton_Click(object sender, RoutedEventArgs e)
         {
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
@@ -93,7 +93,7 @@ namespace TorrentWpfClient
             }
         }
 
-        // Обработчик выбора торрента в TorrentStatusList
+        
         private void TorrentStatusList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (TorrentStatusList.SelectedItem is TorrentStatus selectedStatus)
@@ -106,7 +106,7 @@ namespace TorrentWpfClient
             }
         }
 
-        // Обновление прогресс-бара для выбранного торрента
+        
         private void UpdateProgressBar()
         {
             if (selectedManager != null)
@@ -118,7 +118,7 @@ namespace TorrentWpfClient
             }
         }
 
-        // Мониторинг прогресса загрузки торрентов
+        
         private async void MonitorProgress(TorrentManager manager)
         {
             var statusItem = torrentStatusList.FirstOrDefault(item => item.Name == manager.Torrent.Name);
@@ -153,7 +153,7 @@ namespace TorrentWpfClient
             });
         }
 
-        // Обработчик удаления торрента
+        
         private async void DeleteTorrentButton_Click(object sender, RoutedEventArgs e)
         {
             MessageBox.Show("The program stops downloading this torrent file, please wait");
@@ -168,7 +168,7 @@ namespace TorrentWpfClient
                         await WaitForManagerState(manager, TorrentState.Stopped);
                     }
 
-                    // Спрашиваем у пользователя, хочет ли он удалить файлы
+                    
                     var result = MessageBox.Show("Delete application folder?",
                         "Delete torrent", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
@@ -176,12 +176,12 @@ namespace TorrentWpfClient
                     {
                         try
                         {
-                            // Определяем путь к папке, в которую были загружены файлы торрента
+                            
                             string torrentDownloadPath = Path.Combine(downloadPath, selectedStatus.Name);
 
                             if (Directory.Exists(torrentDownloadPath))
                             {
-                                Directory.Delete(torrentDownloadPath, true); // Удаление папки с содержимым
+                                Directory.Delete(torrentDownloadPath, true);
                                 MessageBox.Show($"The application folder {torrentDownloadPath} has been deleted.");
                             }
                             
