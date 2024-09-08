@@ -155,7 +155,7 @@ namespace TorrentWpfClient
         
         private async void DeleteTorrentButton_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("The program stops downloading this torrent file, please wait");
+            
             if (TorrentStatusList.SelectedItem is TorrentStatus selectedStatus)
             {
                 var manager = torrents.FirstOrDefault(t => t.Torrent.Name == selectedStatus.Name);
